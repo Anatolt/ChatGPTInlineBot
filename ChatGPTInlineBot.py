@@ -4,14 +4,16 @@ from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, InlineQueryHandler, ContextTypes
 import logging
 import uuid
-import asyncio
 import httpx
 import re
 
 # Загрузка переменных окружения из .env
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER")
+OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE")
 LLM_SYSTEM_PROMPT = os.getenv("LLM_SYSTEM_PROMPT", "You are a helpful assistant.")
 
 # Логирование для отладки
@@ -32,15 +34,20 @@ def is_english(text):
     letters = re.findall(r'[a-zA-Z]', text)
     return len(letters) > len(text) / 2
 
-async def ask_openai(prompt: str) -> str:
-    logger.info(f"Запрос к OpenAI: {prompt}")
-    url = "https://api.openai.com/v1/chat/completions"
+async def ask_openrouter(prompt: str) -> str:
+    logger.info(f"Запрос к OpenRouter: {prompt}")
+    url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
+    if OPENROUTER_HTTP_REFERER:
+        headers["HTTP-Referer"] = OPENROUTER_HTTP_REFERER
+    if OPENROUTER_APP_TITLE:
+        headers["X-Title"] = OPENROUTER_APP_TITLE
+
     data = {
-        "model": "gpt-4-turbo",
+        "model": OPENROUTER_MODEL,
         "messages": [
             {"role": "system", "content": LLM_SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
@@ -52,7 +59,7 @@ async def ask_openai(prompt: str) -> str:
         response = await client.post(url, headers=headers, json=data, timeout=30)
         response.raise_for_status()
         result = response.json()
-        logger.info(f"Ответ от OpenAI: {result}")
+        logger.info(f"Ответ от OpenRouter: {result}")
         return result["choices"][0]["message"]["content"].strip()
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,12 +94,12 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.inline_query.answer(results, cache_time=1)
         return
 
-    # Получаем ответ от OpenAI
+    # Получаем ответ от OpenRouter
     try:
-        answer = await ask_openai(query)
+        answer = await ask_openrouter(query)
     except Exception as e:
-        logger.error(f"OpenAI error: {e}")
-        answer = "Error contacting OpenAI."
+        logger.error(f"OpenRouter error: {e}")
+        answer = "Error contacting OpenRouter."
 
     # Формируем ответ с текстом запроса (сначала ответ, затем вопрос)
     if is_english(query):
@@ -117,6 +124,11 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.inline_query.answer(results, cache_time=1)
 
 def main():
+    if not TELEGRAM_BOT_TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(InlineQueryHandler(inline_query_handler))
     application.run_polling()

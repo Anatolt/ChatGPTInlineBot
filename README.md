@@ -11,7 +11,8 @@ cp env.example .env
 
 2. Отредактируйте файл `.env` и заполните необходимые переменные:
 - `TELEGRAM_BOT_TOKEN` - токен вашего бота (получите у @BotFather)
-- `OPENAI_API_KEY` - ваш API ключ OpenAI
+- `OPENROUTER_API_KEY` - ваш API ключ OpenRouter
+- `OPENROUTER_MODEL` - опционально, модель (например `openai/gpt-4o-mini`)
 - `LLM_SYSTEM_PROMPT` - опционально, системный промпт для ChatGPT
 
 ## Запуск с Docker
@@ -41,7 +42,7 @@ docker run -d --name chatgpt-bot --env-file .env chatgpt-inline-bot
 
 ## Features
 - Inline mode: just type `@YourBotName your question` in any chat
-- Uses OpenAI GPT-4-turbo for answers
+- Uses OpenRouter-compatible models for answers
 - Shows both the answer and the original query
 - English-only interface for all user messages
 - Query length limits (min 10, max 200 characters)
@@ -49,7 +50,7 @@ docker run -d --name chatgpt-bot --env-file .env chatgpt-inline-bot
 ## Requirements
 - Python 3.8+
 - Telegram bot token ([how to get one](https://core.telegram.org/bots#6-botfather))
-- OpenAI API key ([how to get one](https://platform.openai.com/account/api-keys))
+- OpenRouter API key ([how to get one](https://openrouter.ai/keys))
 
 ## Installation
 1. **Clone the repository:**
@@ -64,7 +65,8 @@ docker run -d --name chatgpt-bot --env-file .env chatgpt-inline-bot
 3. **Create a `.env` file:**
    ```env
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-   OPENAI_API_KEY=your_openai_api_key
+   OPENROUTER_API_KEY=your_openrouter_api_key
+   # Optional: OPENROUTER_MODEL=openai/gpt-4o-mini
    # Optional: LLM_SYSTEM_PROMPT=You are a helpful assistant.
    ```
 
