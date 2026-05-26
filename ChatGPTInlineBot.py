@@ -10,10 +10,9 @@ import re
 # Загрузка переменных окружения из .env
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER")
-OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE")
+GPT5_API_BASE = os.getenv("GPT5_API_BASE", "https://de.hohohosting.ru/gpt5/v1").rstrip("/")
+GPT5_API_KEY = os.getenv("GPT5_API_KEY")
+GPT5_MODEL = os.getenv("GPT5_MODEL", "gpt-5.5")
 LLM_SYSTEM_PROMPT = os.getenv("LLM_SYSTEM_PROMPT", "You are a helpful assistant.")
 
 # Логирование для отладки
@@ -21,6 +20,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # Минимальная длина запроса
 MIN_QUERY_LENGTH = 10
@@ -34,32 +35,26 @@ def is_english(text):
     letters = re.findall(r'[a-zA-Z]', text)
     return len(letters) > len(text) / 2
 
-async def ask_openrouter(prompt: str) -> str:
-    logger.info(f"Запрос к OpenRouter: {prompt}")
-    url = "https://openrouter.ai/api/v1/chat/completions"
+async def ask_gpt5(prompt: str) -> str:
+    logger.info(f"Запрос к GPT5 API: {prompt}")
+    url = f"{GPT5_API_BASE}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {GPT5_API_KEY}",
         "Content-Type": "application/json"
     }
-    if OPENROUTER_HTTP_REFERER:
-        headers["HTTP-Referer"] = OPENROUTER_HTTP_REFERER
-    if OPENROUTER_APP_TITLE:
-        headers["X-Title"] = OPENROUTER_APP_TITLE
-
     data = {
-        "model": OPENROUTER_MODEL,
+        "model": GPT5_MODEL,
         "messages": [
             {"role": "system", "content": LLM_SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 512,
-        "temperature": 0.7
+        "max_tokens": 512
     }
     async with httpx.AsyncClient() as client:
-        response = await client.post(url, headers=headers, json=data, timeout=30)
+        response = await client.post(url, headers=headers, json=data, timeout=60)
         response.raise_for_status()
         result = response.json()
-        logger.info(f"Ответ от OpenRouter: {result}")
+        logger.info("Получен ответ от GPT5 API")
         return result["choices"][0]["message"]["content"].strip()
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,12 +89,12 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.inline_query.answer(results, cache_time=1)
         return
 
-    # Получаем ответ от OpenRouter
+    # Получаем ответ от GPT5 API
     try:
-        answer = await ask_openrouter(query)
+        answer = await ask_gpt5(query)
     except Exception as e:
-        logger.error(f"OpenRouter error: {e}")
-        answer = "Error contacting OpenRouter."
+        logger.error(f"GPT5 API error: {e}")
+        answer = "Error contacting GPT5 API."
 
     # Формируем ответ с текстом запроса (сначала ответ, затем вопрос)
     if is_english(query):
@@ -126,8 +121,8 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 def main():
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
-    if not OPENROUTER_API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY is not set")
+    if not GPT5_API_KEY:
+        raise RuntimeError("GPT5_API_KEY is not set")
 
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(InlineQueryHandler(inline_query_handler))
